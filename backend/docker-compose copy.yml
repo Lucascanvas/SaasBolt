@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "SecurePassB360"
+    ports:
+      - '4101:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - saas-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d evolution"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@pgadmin.com
+      PGADMIN_DEFAULT_PASSWORD: "AdminPassBolt360"
+    ports:
+      - '4102:80'
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - saas-network
+
+  evolution-api:
+    container_name: evolution_api
+    image: atendai/evolution-api:v2.2.0
+    restart: always
+    ports:
+      - "4103:8080"
+    environment:
+      - SERVER_URL=https://evolution.campanhas.bchat.lat
+      - DEL_INSTANCE=false
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://postgres:SecurePassB360@postgres:5432/evolution
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - DATABASE_SAVE_DATA_LABELS=true
+      - DATABASE_SAVE_DATA_HISTORIC=true
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution_v2
+      - RABBITMQ_ENABLED=false
+      - RABBITMQ_URI=amqp://admin:admin@rabbitmq:5672/default
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://evo_redis:6379/1
+      - CACHE_REDIS_PREFIX_KEY=evolution_v2
+      - CACHE_REDIS_SAVE_INSTANCES=false
+      - CACHE_LOCAL_ENABLED=false
+      - S3_ENABLED=true
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY="MinioSecret123"
+      - S3_BUCKET=evolution
+      - S3_PORT=443
+      - S3_ENDPOINT=files.site.com
+      - S3_USE_SSL=true
+      - AUTHENTICATION_API_KEY="AuthKey123456"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      redis:
+        condition: service_started
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - saas-network
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: "MinioSecret123"
+    ports:
+      - "4104:9000"
+      - "4105:9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - saas-network
+
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "4106:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - saas-network
+
+volumes:
+  postgres-data:
+  pgadmin-data:
+  evolution_instances:
+  minio-data:
+  redis-data:
+
+networks:
+  saas-network:
+    name: saas-network
+    driver: bridge

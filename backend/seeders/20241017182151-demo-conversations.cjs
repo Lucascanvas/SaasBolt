@@ -1,53 +1,28 @@
 'use strict';
 
 module.exports = {
-  async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('Conversations', {
-      id: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        autoIncrement: true,
-        primaryKey: true,
+  up: async (queryInterface, Sequelize) => {
+    return queryInterface.bulkInsert('Conversations', [
+      {
+        workspaceId: 1,
+        name: 'Conversa Geral',
+        isGroup: true,
+        type: 'GROUP',
+        createdAt: new Date(),
+        updatedAt: new Date()
       },
-      workspaceId: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        references: {
-          model: 'Workspaces',
-          key: 'id',
-        },
-      },
-      name: {
-        type: Sequelize.STRING,
-        allowNull: false,
-      },
-      isGroup: {
-        type: Sequelize.BOOLEAN,
-        defaultValue: false,
-      },
-      lastMessageAt: {
-        type: Sequelize.DATE,
-      },
-      groupProfilePhoto: {
-        type: Sequelize.STRING,
-        allowNull: true,
-      },
-      type: {  // Adicionando a coluna "type" se realmente for necessária
-        type: Sequelize.STRING,
-        allowNull: true, // Defina conforme necessário
-      },
-      createdAt: {
-        type: Sequelize.DATE,
-        allowNull: false,
-      },
-      updatedAt: {
-        type: Sequelize.DATE,
-        allowNull: false,
-      },
-    });
+      {
+        workspaceId: 1,
+        name: 'Chat Privado',
+        isGroup: false,
+        type: 'PRIVATE',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ]);
   },
 
-  async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('Conversations');
-  },
+  down: async (queryInterface, Sequelize) => {
+    return queryInterface.bulkDelete('Conversations', null, {});
+  }
 };

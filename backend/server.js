@@ -9,17 +9,23 @@ import recipientRoutes from './routes/recipient.js';
 import webhookRoutes from './routes/webhook.routes.js';
 import messageHistoryRoutes from './routes/messageHistory.routes.js';
 import cors from 'cors';
-import sequelize, { testConnection } from './config/database.js';
+import sequelize from './config/database.js';
+import superadminRoutes from './routes/superadmin.routes.js';
+import workspaceRoutes from './routes/workspace.routes.js';
 
 dotenv.config()
 
 const PORT = process.env.PORT || 2345
 
 // Teste de conexão ao iniciar
-testConnection().catch(err => {
-    console.error('Erro fatal ao conectar ao banco:', err);
-    process.exit(1);
-});
+sequelize.authenticate()
+    .then(() => {
+        console.log('📊 Conexão com o banco estabelecida com sucesso!');
+    })
+    .catch(err => {
+        console.error('❌ Erro ao conectar com o banco:', err);
+        process.exit(1);
+    });
 
 app.set('io', io);
 
@@ -76,6 +82,8 @@ app.use('/api/recipients', recipientRoutes);
 app.use('/webhook', webhookRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/message-history', messageHistoryRoutes);
+app.use('/api/superadmin', superadminRoutes);
+app.use('/api/workspaces', workspaceRoutes);
 
 // Configuração do Socket.IO
 io.engine.use((req, res, next) => {
@@ -133,7 +141,7 @@ server.listen(PORT, async () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
     
     // Testa a conexão novamente após o servidor iniciar
-    await testConnection();
+    await sequelize.authenticate();
 });
 
 export default server;

@@ -4,9 +4,9 @@ export default (sequelize) => {
     class Workspace extends Model {
         static associate(models) {
             Workspace.belongsToMany(models.User, {
-                through: models.UserWorkspace,
-                foreignKey: 'workspaceId',
-                otherKey: 'userId'
+                through: 'UserWorkspace',
+                as: 'users',
+                foreignKey: 'workspaceId'
             });
 
             Workspace.hasMany(models.Conversation, {
@@ -54,6 +54,15 @@ export default (sequelize) => {
             type: DataTypes.STRING,
             allowNull: false,
             unique: true
+        },
+        availableMessages: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 0
+        },
+        messagesExpiration: {
+            type: DataTypes.DATE,
+            allowNull: true
         }
         // Outros campos relevantes para o Workspace
     }, {

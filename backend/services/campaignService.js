@@ -13,7 +13,6 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Função para iniciar a campanha
 const startCampaign = async (campaignId) => {
     try {
-        // Busca a campanha
         const campaign = await Campaign.findByPk(campaignId);
         if (!campaign) throw new Error('Campanha não encontrada');
 
@@ -22,178 +21,192 @@ const startCampaign = async (campaignId) => {
             ? campaign.messages 
             : JSON.parse(campaign.messages);
 
-        // Busca e processa o CSV
-        const csvContent = await getCsvContent(campaign.csvFileUrl);
-        const contacts = await processCsvContent(csvContent);
-        
-        // Calcula o total de mensagens ANTES de emitir o evento
-        const totalMessages = contacts.length * messages.length;
-
-        console.log('\x1b[34m%s\x1b[0m', `[SOCKET EMIT] campaignStarted:`, {
-            campaignId: campaign.id,
-            name: campaign.name,
-            workspaceId: campaign.workspaceId,
-            totalMessages,
-            totalContacts: contacts.length,
-            messageCount: messages.length,
-            messageInterval: campaign.messageInterval
-        });
-        
-        // Emite o evento com o intervalo incluído
-        io.to(`workspace_${campaign.workspaceId}`).emit('campaignStarted', {
-            campaignId: campaign.id,
-            name: campaign.name,
-            workspaceId: campaign.workspaceId,
-            startTime: new Date(),
-            totalMessages,
-            totalContacts: contacts.length,
-            messageCount: messages.length,
-            messageInterval: campaign.messageInterval
-        });
-
-        // Atualiza status para PROCESSING
-        await campaign.update({ status: 'PROCESSING' });
-        
-        let successCount = 0;
-        let failureCount = 0;
-        let startTime = Date.now();
-
-        // Durante o processamento
-        for (const contact of contacts) {
-            for (const messageObj of messages) {
-                let processedMessage = messageObj.content; // Inicializa com o conteúdo original
-                
-                try {
-                    // Processa a mensagem substituindo variáveis
-                    processedMessage = processMessageVariables(messageObj.content, contact);
-                    
-                    await sendWhatsAppMessage(
-                        campaign.workspaceId,
-                        campaign.instanceIds[0],
-                        contact,
-                        [messageObj]
-                    );
-
-                    // Registrar envio bem-sucedido
-                    await MessageHistory.create({
-                        campaignId: campaign.id,
-                        contact: contact.phone,
-                        message: processedMessage,
-                        status: 'SENT',
-                        sentAt: new Date(),
-                        metadata: {
-                            contactName: contact.name,
-                            messageType: 'text',
-                            variables: contact
-                        }
-                    });
-
-                    successCount++;
-                    
-                    console.log('\x1b[32m%s\x1b[0m', `[SOCKET EMIT] messageSent:`, {
-                        campaignId: campaign.id,
-                        contact: contact.phone,
-                        status: 'SENT'
-                    });
-                    
-                    io.to(`workspace_${campaign.workspaceId}`).emit('messageSent', {
-                        campaignId: campaign.id,
-                        contact: contact.phone,
-                        message: processedMessage,
-                        sentAt: new Date(),
-                        status: 'SENT'
-                    });
-
-                    // Aguarda o intervalo configurado antes da próxima mensagem
-                    if (contacts.indexOf(contact) < contacts.length - 1 || messages.indexOf(messageObj) < messages.length - 1) {
-                        console.log(`\x1b[36m[Campanha ${campaign.id}]\x1b[0m Aguardando ${campaign.messageInterval} segundos antes da próxima mensagem...`);
-                        
-                        // Contagem regressiva
-                        for (let second = campaign.messageInterval; second > 0; second--) {
-                            process.stdout.write(`\r\x1b[33m[Campanha ${campaign.id}]\x1b[0m Tempo restante: ${second} segundos...`);
-                            await wait(1000);
-                        }
-                    }
-                } catch (error) {
-                    // Registrar falha no envio
-                    await MessageHistory.create({
-                        campaignId: campaign.id,
-                        contact: contact.phone,
-                        message: processedMessage, // Usa a mensagem processada ou original
-                        status: 'ERROR',
-                        error: error.message,
-                        sentAt: new Date(),
-                        metadata: {
-                            contactName: contact.name,
-                            messageType: 'text',
-                            variables: contact,
-                            errorDetails: error.stack
-                        }
-                    });
-
-                    failureCount++;
-                    
-                    console.log('\x1b[31m%s\x1b[0m', `[SOCKET EMIT] messageError:`, {
-                        campaignId: campaign.id,
-                        contact: contact.phone,
-                        error: error.message
-                    });
-                    
-                    io.to(`workspace_${campaign.workspaceId}`).emit('messageError', {
-                        campaignId: campaign.id,
-                        contact: contact.phone,
-                        message: processedMessage,
-                        error: error.message,
-                        sentAt: new Date()
-                    });
-                }
-
-                // Log e emissão do progresso
-                emitProgress(campaign, successCount, failureCount, totalMessages);
-            }
+        // Verifica se há URL do CSV
+        if (!campaign.csvFileUrl) {
+            throw new Error('URL do arquivo CSV não fornecida');
         }
 
-        // Log e emissão da conclusão
-        console.log('\x1b[34m%s\x1b[0m', `[SOCKET EMIT] campaignCompleted:`, {
-            campaignId: campaign.id,
-            status: 'COMPLETED',
-            stats: { totalMessages, successCount, failureCount }
-        });
-        io.to(`workspace_${campaign.workspaceId}`).emit('campaignCompleted', {
-            campaignId: campaign.id,
-            status: 'COMPLETED',
-            stats: {
+        // Busca e processa o CSV
+        try {
+            const csvContent = await getCsvContent(campaign.csvFileUrl);
+            const contacts = await processCsvContent(csvContent);
+            
+            // Calcula o total de mensagens ANTES de emitir o evento
+            const totalMessages = contacts.length * messages.length;
+
+            console.log('\x1b[34m%s\x1b[0m', `[SOCKET EMIT] campaignStarted:`, {
+                campaignId: campaign.id,
+                name: campaign.name,
+                workspaceId: campaign.workspaceId,
                 totalMessages,
+                totalContacts: contacts.length,
+                messageCount: messages.length,
+                messageInterval: campaign.messageInterval
+            });
+            
+            // Emite o evento com o intervalo incluído
+            io.to(`workspace_${campaign.workspaceId}`).emit('campaignStarted', {
+                campaignId: campaign.id,
+                name: campaign.name,
+                workspaceId: campaign.workspaceId,
+                startTime: new Date(),
+                totalMessages,
+                totalContacts: contacts.length,
+                messageCount: messages.length,
+                messageInterval: campaign.messageInterval
+            });
+
+            // Atualiza status para PROCESSING
+            await campaign.update({ status: 'PROCESSING' });
+            
+            let successCount = 0;
+            let failureCount = 0;
+            let startTime = Date.now();
+
+            // Durante o processamento
+            for (const contact of contacts) {
+                for (const messageObj of messages) {
+                    let processedMessage = messageObj.content; // Inicializa com o conteúdo original
+                    
+                    try {
+                        // Processa a mensagem substituindo variáveis
+                        processedMessage = processMessageVariables(messageObj.content, contact);
+                        
+                        await sendWhatsAppMessage(
+                            campaign.workspaceId,
+                            campaign.instanceIds[0],
+                            contact,
+                            [messageObj]
+                        );
+
+                        // Registrar envio bem-sucedido
+                        await MessageHistory.create({
+                            campaignId: campaign.id,
+                            contact: contact.phone,
+                            message: processedMessage,
+                            status: 'SENT',
+                            sentAt: new Date(),
+                            metadata: {
+                                contactName: contact.name,
+                                messageType: 'text',
+                                variables: contact
+                            }
+                        });
+
+                        successCount++;
+                        
+                        console.log('\x1b[32m%s\x1b[0m', `[SOCKET EMIT] messageSent:`, {
+                            campaignId: campaign.id,
+                            contact: contact.phone,
+                            status: 'SENT'
+                        });
+                        
+                        io.to(`workspace_${campaign.workspaceId}`).emit('messageSent', {
+                            campaignId: campaign.id,
+                            contact: contact.phone,
+                            message: processedMessage,
+                            sentAt: new Date(),
+                            status: 'SENT'
+                        });
+
+                        // Aguarda o intervalo configurado antes da próxima mensagem
+                        if (contacts.indexOf(contact) < contacts.length - 1 || messages.indexOf(messageObj) < messages.length - 1) {
+                            console.log(`\x1b[36m[Campanha ${campaign.id}]\x1b[0m Aguardando ${campaign.messageInterval} segundos antes da próxima mensagem...`);
+                            
+                            // Contagem regressiva
+                            for (let second = campaign.messageInterval; second > 0; second--) {
+                                process.stdout.write(`\r\x1b[33m[Campanha ${campaign.id}]\x1b[0m Tempo restante: ${second} segundos...`);
+                                await wait(1000);
+                            }
+                        }
+                    } catch (error) {
+                        // Registrar falha no envio
+                        await MessageHistory.create({
+                            campaignId: campaign.id,
+                            contact: contact.phone,
+                            message: processedMessage, // Usa a mensagem processada ou original
+                            status: 'ERROR',
+                            error: error.message,
+                            sentAt: new Date(),
+                            metadata: {
+                                contactName: contact.name,
+                                messageType: 'text',
+                                variables: contact,
+                                errorDetails: error.stack
+                            }
+                        });
+
+                        failureCount++;
+                        
+                        console.log('\x1b[31m%s\x1b[0m', `[SOCKET EMIT] messageError:`, {
+                            campaignId: campaign.id,
+                            contact: contact.phone,
+                            error: error.message
+                        });
+                        
+                        io.to(`workspace_${campaign.workspaceId}`).emit('messageError', {
+                            campaignId: campaign.id,
+                            contact: contact.phone,
+                            message: processedMessage,
+                            error: error.message,
+                            sentAt: new Date()
+                        });
+                    }
+
+                    // Log e emissão do progresso
+                    emitProgress(campaign, successCount, failureCount, totalMessages);
+                }
+            }
+
+            // Log e emissão da conclusão
+            console.log('\x1b[34m%s\x1b[0m', `[SOCKET EMIT] campaignCompleted:`, {
+                campaignId: campaign.id,
+                status: 'COMPLETED',
+                stats: { totalMessages, successCount, failureCount }
+            });
+            io.to(`workspace_${campaign.workspaceId}`).emit('campaignCompleted', {
+                campaignId: campaign.id,
+                status: 'COMPLETED',
+                stats: {
+                    totalMessages,
+                    successCount,
+                    failureCount,
+                    completedAt: new Date()
+                }
+            });
+
+            // Ao finalizar com sucesso
+            await campaign.update({ 
+                status: 'COMPLETED',
                 successCount,
                 failureCount,
-                completedAt: new Date()
-            }
-        });
+                lastProcessedAt: new Date()
+            });
+            console.log('\x1b[35m%s\x1b[0m', `[SOCKET EMIT] campaignStatusChanged:`, {
+                campaignId: campaign.id,
+                previousStatus: 'PROCESSING',
+                newStatus: 'COMPLETED'
+            });
+            io.to(`workspace_${campaign.workspaceId}`).emit('campaignStatusChanged', {
+                campaignId: campaign.id,
+                previousStatus: 'PROCESSING',
+                newStatus: 'COMPLETED',
+                timestamp: new Date(),
+                stats: {
+                    successCount,
+                    failureCount,
+                    totalMessages
+                }
+            });
 
-        // Ao finalizar com sucesso
-        await campaign.update({ 
-            status: 'COMPLETED',
-            successCount,
-            failureCount,
-            lastProcessedAt: new Date()
-        });
-        console.log('\x1b[35m%s\x1b[0m', `[SOCKET EMIT] campaignStatusChanged:`, {
-            campaignId: campaign.id,
-            previousStatus: 'PROCESSING',
-            newStatus: 'COMPLETED'
-        });
-        io.to(`workspace_${campaign.workspaceId}`).emit('campaignStatusChanged', {
-            campaignId: campaign.id,
-            previousStatus: 'PROCESSING',
-            newStatus: 'COMPLETED',
-            timestamp: new Date(),
-            stats: {
-                successCount,
-                failureCount,
-                totalMessages
-            }
-        });
-
+        } catch (error) {
+            console.error('[Error] Erro ao processar CSV:', error);
+            await campaign.update({ 
+                status: 'ERROR',
+                error: `Erro ao processar CSV: ${error.message}`
+            });
+            throw error;
+        }
     } catch (error) {
         console.error('Erro ao iniciar campanha:', error);
         throw error;
@@ -242,20 +255,26 @@ const checkScheduledCampaigns = async () => {
         const now = new Date();
         
         // Busca campanhas agendadas que já passaram do horário e ainda não foram iniciadas
-        const scheduledCampaigns = await Campaign.findAll({
+        const pendingCampaigns = await Campaign.findAll({
             where: {
                 status: 'PENDING',
                 startImmediately: false,
                 scheduledTo: {
-                    [Op.lte]: now // Menor ou igual ao horário atual
-                },
-                isActive: true
-            }
+                    [Op.lte]: new Date()
+                }
+            },
+            attributes: [
+                'id', 'workspaceId', 'isActive', 'name', 'type', 
+                'startImmediately', 'startDate', 'messageInterval', 
+                'messages', 'instanceIds', 'csvFileUrl', 'imageUrl', 
+                'status', 'successCount', 'failureCount', 'error', 
+                'lastProcessedAt', 'scheduledTo', 'createdAt', 'updatedAt'
+            ]
         });
 
-        console.log(`\x1b[34m[Campanhas Agendadas]\x1b[0m Verificando... Encontradas: ${scheduledCampaigns.length}`);
+        console.log(`\x1b[34m[Campanhas Agendadas]\x1b[0m Verificando... Encontradas: ${pendingCampaigns.length}`);
 
-        for (const campaign of scheduledCampaigns) {
+        for (const campaign of pendingCampaigns) {
             console.log(`\x1b[34m[Campanha ${campaign.id}]\x1b[0m Iniciando campanha agendada para ${campaign.scheduledTo}`);
             startCampaign(campaign.id).catch(error => {
                 console.error(`\x1b[31m[Campanha ${campaign.id}]\x1b[0m Erro ao iniciar campanha agendada:`, error);

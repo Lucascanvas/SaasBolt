@@ -1,12 +1,12 @@
 import { Sequelize } from 'sequelize';
 import sequelize from '../config/database.js';
 
-import UserModel from './user.js';
+import UserModel from './User.js';
 import MessageModel from './message.js';
 import ConversationModel from './conversation.js';
 import ConversationParticipantsModel from './conversationParticipants.js';
-import WorkspaceModel from './workspace.js';
-import UserWorkspaceModel from './UserWorkspace2.js';
+import WorkspaceModel from './Workspace.js';
+import UserWorkspaceModel from './UserWorkspace.js';
 import WorkspaceModuleModel from './workspaceModule.js';
 import InstanceModel from './instance.js';
 import CampaignModel from './campaign.js';
@@ -16,7 +16,9 @@ import MessageHistoryModel from './messageHistory.js';
 import PasswordResetTokenModel from './passwordResetToken.js';
 import SgaCredentialsModel from './sgaCredentials.js';
 
-const models = {
+const db = {
+  sequelize,
+  Sequelize,
   User: UserModel(sequelize),
   Message: MessageModel(sequelize),
   Conversation: ConversationModel(sequelize),
@@ -33,11 +35,11 @@ const models = {
   SgaCredentials: SgaCredentialsModel(sequelize)
 };
 
-Object.keys(models).forEach(modelName => {
-  if (models[modelName].associate) {
-    models[modelName].associate(models);
+// Chama o método associate de cada modelo
+Object.keys(db).forEach(modelName => {
+  if (db[modelName].associate) {
+    db[modelName].associate(db);
   }
 });
 
-export { sequelize };
-export default models;
+export default db;

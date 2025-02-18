@@ -8,8 +8,11 @@ import {
     setActiveWorkspace, 
     getUserWorkspaces, 
     getActiveWorkspace, 
-    getUserDetails
+    getUserDetails,
+    listUsers,
+    toggleUserStatus
 } from "../controllers/user.controller.js"
+import { verifyToken, verifySuperAdmin } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
@@ -21,5 +24,10 @@ router.put("/active-workspace", isAuthenticate, setActiveWorkspace);
 router.get("/workspaces", isAuthenticate, getUserWorkspaces);
 router.get("/active-workspace", isAuthenticate, getActiveWorkspace);
 router.get("/me", isAuthenticate, getUserDetails);
+
+// Rotas protegidas que requerem autenticação e permissão de superadmin
+router.get('/list', verifyToken, verifySuperAdmin, listUsers);
+router.put('/update/:id', verifyToken, verifySuperAdmin, updateUser);
+router.patch('/toggle-status/:id', verifyToken, verifySuperAdmin, toggleUserStatus);
 
 export default router;

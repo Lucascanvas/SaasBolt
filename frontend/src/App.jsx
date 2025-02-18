@@ -17,6 +17,8 @@ import CriarInstancia from './features/campanhas/CriarInstancia/page'
 import ListarCampanhas from './features/campanhas/ListarCampanhas/page'
 import BoltRotasLayout from './features/boltRotas/brotasLayout'
 import DashboardRotas from './features/boltRotas/page'
+import SuperAdminPage from './pages/SuperAdmin'
+import SuperAdminRoute from './components/SuperAdminRoute'
 
 function App() {
   const { authUser } = useAuthContext();
@@ -50,6 +52,16 @@ function App() {
             <Route index element={<DashboardRotas />} />
           </Route>
         </Route>
+        <Route 
+          path="/superadmin/*" 
+          element={
+            <ProtectedRoute>
+              <SuperAdminRoute>
+                <SuperAdminPage />
+              </SuperAdminRoute>
+            </ProtectedRoute>
+          } 
+        />
         <Route path='*' element={<NotFoundPage />} />
       </Routes>
     </ProtectedRoute>

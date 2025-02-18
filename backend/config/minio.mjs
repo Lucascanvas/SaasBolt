@@ -2,28 +2,23 @@ import { Client } from 'minio';
 import dotenv from 'dotenv';
 import path from 'path';
 
-dotenv.config({ 
-    path: path.resolve(process.cwd(), process.env.NODE_ENV === 'production' ? '.env.production' : '.env.local') 
-});
+dotenv.config();
 
-const isDevelopment = process.env.NODE_ENV !== 'production';
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 const minioConfig = {
-    // Use localhost em desenvolvimento, minio em produção
-    // Lembrar de alterar o host para o ambiente de produção: utilizando Docker host deve ser o nome do container
-    endPoint: isDevelopment ? '20.213.21.109' : (process.env.MINIO_ENDPOINT || '20.213.21.109'),
-    port: parseInt(process.env.MINIO_PORT) || 4004, // Porta mapeada no docker-compose
+    endPoint: process.env.MINIO_ENDPOINT || 'localhost',
+    port: parseInt(process.env.MINIO_PORT) || 9000,
     useSSL: process.env.MINIO_USE_SSL === 'true',
-    accessKey: process.env.MINIO_ROOT_USER || 'admin',
-    secretKey: process.env.MINIO_ROOT_PASSWORD || 'Bolt36023@',
+    accessKey: process.env.MINIO_ROOT_USER,
+    secretKey: process.env.MINIO_ROOT_PASSWORD,
     s3ForcePathStyle: true,
     signatureVersion: 'v4'
 };
 
 // Adicione validação da configuração
-if (minioConfig.endPoint === 'minio' && minioConfig.useSSL) {
-    console.warn('⚠️ Aviso: Desabilitando SSL para comunicação interna com MinIO');
-    minioConfig.useSSL = false;
+if (!minioConfig.accessKey || !minioConfig.secretKey) {
+    console.error('❌ Credenciais do MinIO não configuradas corretamente');
 }
 
 // Congele a configuração para evitar modificações

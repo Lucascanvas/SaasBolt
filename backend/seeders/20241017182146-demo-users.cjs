@@ -1,50 +1,35 @@
 'use strict';
+const bcrypt = require('bcrypt');
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable('Users', {
-      id: {
-        allowNull: false,
-        autoIncrement: true,
-        primaryKey: true,
-        type: Sequelize.INTEGER
+    const hashedPassword = await bcrypt.hash('123456', 10);
+    
+    return queryInterface.bulkInsert('Users', [
+      {
+        username: 'user1',
+        email: 'user1@example.com',
+        password: hashedPassword,
+        cpf: '12345678901',
+        gender: 'Masculino',
+        profilePicture: 'https://avatar.iran.liara.run/public/boy?username=user1',
+        createdAt: new Date(),
+        updatedAt: new Date()
       },
-      username: {
-        type: Sequelize.STRING,
-        allowNull: false
-      },
-      email: {
-        type: Sequelize.STRING,
-        allowNull: false,
-        unique: true
-      },
-      password: {
-        type: Sequelize.STRING,
-        allowNull: false
-      },
-      cpf: {
-        type: Sequelize.STRING,
-        allowNull: false,
-        unique: true
-      },
-      gender: {
-        type: Sequelize.STRING,
-        allowNull: false
-      },
-      profilePicture: {
-        type: Sequelize.STRING
-      },
-      createdAt: {
-        allowNull: false,
-        type: Sequelize.DATE
-      },
-      updatedAt: {
-        allowNull: false,
-        type: Sequelize.DATE
+      {
+        username: 'user2',
+        email: 'user2@example.com',
+        password: hashedPassword,
+        cpf: '23456789012',
+        gender: 'Feminino',
+        profilePicture: 'https://avatar.iran.liara.run/public/girl?username=user2',
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
-    });
+    ]);
   },
+
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.dropTable('Users');
+    return queryInterface.bulkDelete('Users', null, {});
   }
 };

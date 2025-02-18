@@ -1,6 +1,6 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { LayoutDashboardIcon, AppWindowIcon, BuildingIcon, Send, LogOutIcon, ChevronDownIcon } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { LayoutDashboardIcon, AppWindowIcon, BuildingIcon, Send, LogOutIcon, ChevronDownIcon, ShieldIcon } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuGroup, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -16,6 +16,7 @@ export default function Header() {
     const { authUser, setAuthUser } = useAuthContext();
     const { toast } = useToast();
     const { clearSelectedConversation } = useConversation();
+    const navigate = useNavigate();
 
     const activeWorkspace = authUser?.workspaces?.find(w => w.id === authUser.activeWorkspaceId);
 
@@ -59,7 +60,7 @@ export default function Header() {
                 <div className="flex items-center gap-4 sm:gap-6 md:gap-8">
                     <Link to="#" className="flex shrink-0 items-center gap-3">
                         <LayoutDashboardIcon className="h-6 w-6" />
-                        <span className="text-lg font-bold tracking-tight">Bolt 360</span>
+                        <span className="text-lg font-bold tracking-tight">Hive Chat</span>
                     </Link>
                     <nav className="hidden md:block">
                         <ul className="flex items-center gap-6">
@@ -123,8 +124,21 @@ export default function Header() {
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>{authUser?.username}</DropdownMenuLabel>
                             <DropdownMenuSeparator />
+                            {authUser?.superAdmin && (
+                                <>
+                                    <DropdownMenuItem onClick={() => navigate('/superadmin')}>
+                                        <ShieldIcon className="mr-2 h-4 w-4" />
+                                        Administração
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                </>
+                            )}
                             <DropdownMenuItem onClick={logout}>
-                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOutIcon className="mr-2 h-4 w-4" />}
+                                {loading ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <LogOutIcon className="mr-2 h-4 w-4" />
+                                )}
                                 <span>{loading ? "Saindo..." : "Sair"}</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>

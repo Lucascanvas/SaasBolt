@@ -2,12 +2,24 @@ import models from '../models/index.js';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { io } from '../socket/socket.js';
+import { errorHandler } from '../utils/error.js';
 
 dotenv.config();
 
 const { Instance, Workspace } = models;
 const EVOLUTION_API_URL = process.env.URL_EVOLUTION_API;
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
+
+// Configuração base do axios com headers corretos
+const evolutionApi = axios.create({
+    baseURL: process.env.EVOLUTION_API_URL,
+    headers: {
+        'Content-Type': 'application/json',
+        'apikey': process.env.EVOLUTION_API_KEY,
+        'Authorization': `Bearer ${process.env.EVOLUTION_API_KEY}`
+    },
+    timeout: 10000
+});
 
 // Função para configurar o webhook após a criação da instância
 const configureWebhook = async (instanceName, workspaceId) => {
@@ -237,46 +249,68 @@ export const connectInstance = async (req, res) => {
     }
 };
 
-export const listInstances = async (req, res) => {
-  try {
-    const workspaceId = req.params.workspaceId;
-    
-    if (!workspaceId) {
-      return res.status(400).json({ error: 'WorkspaceId não fornecido' });
+// Lista todas as instâncias
+export const listInstances = async (req, res, next) => {
+    try {
+        const workspaceId = req.params.workspaceId;
+        
+        if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) {
+            throw new Error('Configurações da Evolution API ausentes');
+        }
+
+        // Log para debug
+        console.log('Configurações da Evolution API:', {
+            url: process.env.EVOLUTION_API_URL,
+            key: process.env.EVOLUTION_API_KEY,
+            headers: evolutionApi.defaults.headers
+        });
+
+        try {
+            // Buscar instâncias da Evolution API
+            const response = await evolutionApi.get('/instance/fetchInstances', {
+                headers: {
+                    'apikey': process.env.EVOLUTION_API_KEY,
+                    'Authorization': `Bearer ${process.env.EVOLUTION_API_KEY}`
+                }
+            });
+
+            // Buscar instâncias do banco local
+            const localInstances = await Instance.findAll({
+                where: { workspaceId },
+                include: [{
+                    model: Workspace,
+                    attributes: ['name']
+                }]
+            });
+
+            // Mesclar dados
+            const mergedInstances = response.data.map(apiInstance => {
+                const localInstance = localInstances.find(local => 
+                    local.name === apiInstance.instance?.instanceName
+                );
+                return {
+                    ...apiInstance,
+                    workspaceData: localInstance ? {
+                        workspaceId: localInstance.workspaceId,
+                        workspaceName: localInstance.Workspace?.name
+                    } : null
+                };
+            });
+
+            res.json(mergedInstances);
+        } catch (apiError) {
+            console.error('Erro na chamada da Evolution API:', {
+                message: apiError.message,
+                response: apiError.response?.data,
+                status: apiError.response?.status
+            });
+            throw new Error(`Erro ao acessar Evolution API: ${apiError.message}`);
+        }
+
+    } catch (error) {
+        console.error('Erro ao listar instâncias:', error);
+        next(errorHandler(error.response?.status || 500, error.message));
     }
-
-    // Buscar instâncias do banco de dados local
-    const localInstances = await Instance.findAll({
-      where: { workspaceId: workspaceId },
-      attributes: ['name']
-    });
-
-    // Corrigido: não adicionamos o workspaceId novamente, pois já está incluído no nome
-    const localInstanceNames = localInstances.map(instance => instance.name);
-
-    const response = await axios.get(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
-      headers: {
-        'apikey': EVOLUTION_API_KEY
-      }
-    });
-
-    const allInstances = response.data;
-
-    const filteredInstances = allInstances.filter(instance => 
-      localInstanceNames.includes(instance.name)
-    );
-
-
-    const formattedInstances = filteredInstances.map(instance => ({
-      ...instance,
-      name: instance.name.replace(`${workspaceId}-`, '')
-    }));
-
-    res.json(formattedInstances);
-  } catch (error) {
-    console.error('Erro ao listar instâncias:', error);
-    res.status(500).json({ error: 'Erro ao listar instâncias' });
-  }
 };
 
 // Função para buscar informações de uma instância específica

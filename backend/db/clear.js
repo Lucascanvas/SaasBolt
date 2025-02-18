@@ -1,43 +1,55 @@
-import 'dotenv/config'; // Carregar variáveis de ambiente do arquivo .env
-import pkg from 'pg'; // Importando o pacote 'pg'
+import pkg from 'pg';
 const { Client } = pkg;
+import dotenv from 'dotenv';
 
-// Configurações do banco de dados usando as variáveis do .env
+dotenv.config();
+
 const client = new Client({
-  user: process.env.POSTGRES_USER,
-  host: process.env.POSTGRES_HOST,
-  database: process.env.POSTGRES_DB,
-  password: process.env.POSTGRES_PASSWORD,
-  port: process.env.POSTGRES_PORT || 4001,  // Porta padrão do PostgreSQL
+    user: process.env.POSTGRES_USER || "bolt360ti",
+    host: "localhost",
+    database: process.env.POSTGRES_DB || "campanhas360",
+    password: process.env.POSTGRES_PASSWORD || "kasdjasidaau1n213mmaaasdncksk",
+    port: process.env.POSTGRES_PORT || 4001,
 });
 
-// Função para excluir todas as tabelas
-const dropAllTables = async () => {
-  try {
-    // Conectando ao banco de dados
-    await client.connect();
-    console.log('Conectado ao banco de dados!');
+async function clearDatabase() {
+    try {
+        await client.connect();
+        console.log('Conectado ao banco de dados!');
 
-    // Desabilitar temporariamente as restrições de chave estrangeira
-    await client.query('SET session_replication_role = replica;');
+        // Remover todos os tipos ENUM
+        await client.query(`
+            DO $$ 
+            DECLARE 
+                enum_type text;
+            BEGIN 
+                FOR enum_type IN (SELECT DISTINCT t.typname 
+                                FROM pg_type t 
+                                JOIN pg_enum e ON t.oid = e.enumtypid 
+                                JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace) 
+                LOOP 
+                    EXECUTE 'DROP TYPE IF EXISTS ' || enum_type || ' CASCADE'; 
+                END LOOP; 
+            END $$;
+        `);
 
-    // Excluir todas as tabelas no esquema 'public'
-    await client.query('DROP SCHEMA public CASCADE;');
+        // Remover todas as tabelas
+        await client.query(`
+            DROP SCHEMA public CASCADE;
+            CREATE SCHEMA public
+        `);
 
-    // Recriar o esquema 'public'
-    await client.query('CREATE SCHEMA public;');
+        console.log('Todas as tabelas e tipos foram excluídos com sucesso!');
+    } catch (error) {
+        console.error('Erro ao excluir as tabelas:', error);
+    } finally {
+        // Fechar a conexão com o banco de dados
+        await client.end();
+    }
+}
 
-    // Habilitar novamente as restrições de chave estrangeira
-    await client.query('SET session_replication_role = DEFAULT;');
-
-    console.log('Todas as tabelas foram excluídas com sucesso!');
-  } catch (error) {
-    console.error('Erro ao excluir as tabelas:', error);
-  } finally {
-    // Fechar a conexão com o banco de dados
-    await client.end();
-  }
-};
-
-// Executar a função
-dropAllTables();
+// Executar a função e aguardar sua conclusão
+(async () => {
+  await clearDatabase();
+  process.exit(0);
+})();

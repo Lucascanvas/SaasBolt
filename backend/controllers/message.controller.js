@@ -1,6 +1,7 @@
 import models from '../models/index.js';
 import { getReceiverSocketId, io } from "../socket/socket.js";
 import { messageQueue } from '../utils/MessageQueue.js';
+import { checkAndDecrementMessages } from './workspace.controller.js';
 
 const { Message, Conversation, User, UserWorkspace } = models;
 
@@ -53,7 +54,12 @@ export const getMessages = async (req, res) => {
 
 export const sendMessage = async (req, res, next) => {
     try {
-        const { content, recipientId, workspaceId } = req.body;
+        const workspaceId = req.user.activeWorkspaceId;
+        
+        // Verificar e decrementar mensagens antes de enviar
+        await checkAndDecrementMessages(workspaceId);
+        
+        const { content, recipientId } = req.body;
         const senderId = req.user.id;
 
         // Validações...
@@ -94,7 +100,7 @@ export const sendMessage = async (req, res, next) => {
 
     } catch (error) {
         console.error('Erro ao enviar mensagem:', error);
-        next(error);
+        next(errorHandler(500, error.message));
     }
 };
 

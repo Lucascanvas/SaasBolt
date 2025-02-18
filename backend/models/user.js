@@ -29,7 +29,7 @@ export default (sequelize) => {
                 through: models.UserWorkspace,
                 foreignKey: 'userId',
                 otherKey: 'workspaceId',
-                as: 'participatedWorkspaces'
+                as: 'workspaces'
             });
 
             User.belongsTo(models.Workspace, {
@@ -86,6 +86,16 @@ export default (sequelize) => {
                 model: 'Workspaces',
                 key: 'id'
             }
+        },
+        superAdmin: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+            allowNull: false
+        },
+        isActive: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: true
         }
     }, {
         sequelize,

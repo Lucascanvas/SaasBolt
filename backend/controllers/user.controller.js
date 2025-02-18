@@ -63,18 +63,42 @@ export const createUser = async (req, res) => {
     }
 };
 
-export const updateUser = async (req, res) => {
+export const updateUser = async (req, res, next) => {
     try {
-        const userId = req.user.id;
-        const { username, email, profilePicture, gender } = req.body;
-        const user = await User.findByPk(userId);
+        const { id } = req.params;
+        const { email, username, password, cpf, gender } = req.body;
+
+        const user = await User.findByPk(id);
         if (!user) {
-            return res.status(404).json({ error: "Usuário não encontrado" });
+            return next(errorHandler(404, "Usuário não encontrado"));
         }
-        await user.update({ username, email, profilePicture, gender });
-        res.json({ ...user.toJSON(), password: undefined });
+
+        const updateData = {
+            email,
+            username,
+            cpf,
+            gender
+        };
+
+        if (password) {
+            updateData.password = await bcrypt.hash(password, 10);
+        }
+
+        await user.update(updateData);
+
+        res.json({
+            message: "Usuário atualizado com sucesso",
+            user: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                cpf: user.cpf,
+                gender: user.gender,
+                isActive: user.isActive
+            }
+        });
     } catch (error) {
-        res.status(400).json({ error: error.message });
+        next(errorHandler(500, error.message));
     }
 };
 
@@ -193,5 +217,68 @@ export const getUserDetails = async (req, res, next) => {
         });
     } catch (error) {
         next(error);
+    }
+};
+
+export const listUsers = async (req, res, next) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        const { count, rows: users } = await User.findAndCountAll({
+            include: [{
+                model: Workspace,
+                as: 'workspaces',
+                through: {
+                    model: UserWorkspace,
+                    attributes: ['role']
+                }
+            }],
+            attributes: ['id', 'email', 'username', 'cpf', 'gender', 'superAdmin', 'isActive', 'createdAt'],
+            limit,
+            offset,
+            order: [['createdAt', 'DESC']]
+        });
+
+        res.json({
+            users: users.map(user => ({
+                ...user.toJSON(),
+                password: undefined
+            })),
+            pagination: {
+                total: count,
+                pages: Math.ceil(count / limit),
+                currentPage: page,
+                perPage: limit
+            }
+        });
+    } catch (error) {
+        next(errorHandler(500, error.message));
+    }
+};
+
+export const toggleUserStatus = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findByPk(id);
+
+        if (!user) {
+            return next(errorHandler(404, "Usuário não encontrado"));
+        }
+
+        await user.update({ isActive: !user.isActive });
+
+        res.json({
+            message: `Usuário ${user.isActive ? 'ativado' : 'desativado'} com sucesso`,
+            user: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                isActive: user.isActive
+            }
+        });
+    } catch (error) {
+        next(errorHandler(500, error.message));
     }
 };

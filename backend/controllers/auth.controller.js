@@ -1,17 +1,16 @@
-import models from '../models/index.js';
+import db from '../models/index.js';
 import bcryptjs from "bcryptjs"
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv"
-import { sequelize } from "../models/index.js"
 import { validateCPF } from "../utils/validarCPF.js"
 import { errorHandler } from "../utils/error.js"
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
 import { Op } from 'sequelize';
 import emailConfig from '../config/emailConfig.js';
 
 dotenv.config();
-const { User, Workspace, UserWorkspace, PwdReset, PasswordResetToken } = models;
+const { User, Workspace, UserWorkspace, PwdReset, PasswordResetToken } = db;
 //Cadastro
 export const cadastro = async (req, res, next) => {
     try {
@@ -105,17 +104,18 @@ export const login = async (req, res, next) => {
             include: [
                 {
                     model: Workspace,
-                    as: 'participatedWorkspaces',
-                    through: { model: UserWorkspace, attributes: ['role'] },
-                    required: false
+                    as: 'workspaces',
+                    through: {
+                        model: UserWorkspace,
+                        attributes: ['role']
+                    }
                 },
                 {
                     model: Workspace,
-                    as: 'activeWorkspace',
-                    required: false
+                    as: 'activeWorkspace'
                 }
             ],
-            attributes: ['id', 'email', 'username', 'password', 'profilePicture'] // Adicionando profilePicture
+            attributes: ['id', 'email', 'username', 'password', 'profilePicture', 'superAdmin', 'activeWorkspaceId']
         });
 
         if (!user || !await bcrypt.compare(password, user.password)) {
@@ -126,8 +126,9 @@ export const login = async (req, res, next) => {
             id: user.id,
             email: user.email,
             username: user.username,
-            activeWorkspaceId: user.activeWorkspace ? user.activeWorkspace.id : null,
-            profilePicture: user.profilePicture // Adicionando profilePicture ao token
+            superAdmin: user.superAdmin,
+            activeWorkspaceId: user.activeWorkspaceId,
+            profilePicture: user.profilePicture || ""
         }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
         res.json({
@@ -135,13 +136,14 @@ export const login = async (req, res, next) => {
                 id: user.id,
                 email: user.email,
                 username: user.username,
-                profilePicture: user.profilePicture, // Adicionando profilePicture à resposta
-                activeWorkspaceId: user.activeWorkspace ? user.activeWorkspace.id : null,
-                workspaces: user.participatedWorkspaces ? user.participatedWorkspaces.map(w => ({
+                superAdmin: user.superAdmin,
+                profilePicture: user.profilePicture || "",
+                activeWorkspaceId: user.activeWorkspaceId,
+                workspaces: user.workspaces.map(w => ({
                     id: w.id,
                     name: w.name,
                     role: w.UserWorkspace ? w.UserWorkspace.role : null
-                })) : []
+                }))
             },
             token
         });
@@ -227,9 +229,9 @@ export const forgotPassword = async (req, res, next) => {
         try {
             // Envia o email
             await transporter.sendMail({
-                from: `"Bolt 360" <${emailConfig.auth.user}>`,
+                from: `"Hive Chat" <${emailConfig.auth.user}>`,
                 to: email,
-                subject: 'Recuperação de Senha - Bolt 360',
+                subject: 'Recuperação de Senha - Hive Chat',
                 html: `
                     <!DOCTYPE html>
                     <html>
@@ -241,7 +243,7 @@ export const forgotPassword = async (req, res, next) => {
                         <table role="presentation" style="width: 100%; border-collapse: collapse;">
                             <tr>
                                 <td style="padding: 20px 0; text-align: center; background-color: #11ab8a;">
-                                    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Bolt 360</h1>
+                                    <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Hive Chat</h1>
                                 </td>
                             </tr>
                         </table>
@@ -277,7 +279,7 @@ export const forgotPassword = async (req, res, next) => {
                                     
                                     <p style="color: #666666; font-size: 16px; line-height: 1.5;">
                                         Atenciosamente,<br>
-                                        <strong style="color: #11ab8a;">Equipe Bolt 360</strong>
+                                        <strong style="color: #11ab8a;">Equipe Hive Chat</strong>
                                     </p>
                                 </td>
                             </tr>
@@ -290,7 +292,7 @@ export const forgotPassword = async (req, res, next) => {
                                         Este é um e-mail automático, não responda.
                                     </p>
                                     <p style="color: #999999; font-size: 12px; margin: 10px 0 0 0;">
-                                        © ${new Date().getFullYear()} Bolt 360. Todos os direitos reservados.
+                                        © ${new Date().getFullYear()} Hive Chat. Todos os direitos reservados.
                                     </p>
                                 </td>
                             </tr>
@@ -547,7 +549,15 @@ export const verPwdToken = async (req, res, next) => {
 
         // Primeiro, busca o usuário
         const user = await User.findOne({ 
-            where: { email } 
+            where: { email },
+            include: [{
+                model: Workspace,
+                as: 'workspaces',
+                through: {
+                    model: UserWorkspace,
+                    attributes: ['role']
+                }
+            }]
         });
 
         console.log('3. Usuário encontrado:', user ? 'Sim' : 'Não');

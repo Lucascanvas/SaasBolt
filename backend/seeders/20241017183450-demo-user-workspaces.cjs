@@ -12,12 +12,13 @@ module.exports = {
     const existingUserIds = new Set(existingUsers.map(user => user.id));
 
     const userWorkspaces = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 1; i < 10; i++) {  // Começando do 2 para evitar conflito com superadmin
       if (existingUserIds.has(i + 1)) {
         userWorkspaces.push({
           userId: i + 1,
-          workspaceId: i < 5 ? 1 : 2,
-          role: i === 0 || i === 5 ? 'admin' : 'member',
+          workspaceId: i < 5 ? 2 : 3,  // Usando workspaceId 2 e 3 para evitar conflito
+          role: i === 1 || i === 5 ? 'admin' : 'member',
+          isActive: true,
           createdAt: new Date(),
           updatedAt: new Date()
         });
